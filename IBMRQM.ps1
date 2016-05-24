@@ -23,20 +23,40 @@ function Invoke-RQMApi {
     (invoke-webrequest -Uri https://$($ComputerName):$Port/qm/service/com.ibm.rqm.integration.service.IIntegrationService/j_security_check -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $Body -WebSession $session).Content
 }
 
-function Get-RQMTestCase {
+function Get-RQMTestSuite {
     param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory)]$Project, [PSCredential]$Credential)
 
-    [Xml]$TestCases = Invoke-RQMApi -ComputerName $ComputerName -Path resources/$([System.Web.HttpUtility]::UrlEncode($Project))/testcase -Credential $Credential -Port $Port
+    [Xml]$TestSuites = Invoke-RQMApi -ComputerName $ComputerName -Path resources/$([System.Web.HttpUtility]::UrlEncode($Project))/testsuite -Credential $Credential -Port $Port
 
-    foreach($TestCase in $TestCases.feed.entry)
+    foreach($TestSuite in $TestSuites.feed.entry)
     {
-        [xml]$FullInfo = Invoke-RQMApi -ComputerName $ComputerName -FullUri $TestCase.Id -Credential $Credential
+        [xml]$FullInfo = Invoke-RQMApi -ComputerName $ComputerName -FullUri $TestSuite.Id -Credential $Credential
 
+        $TestCases = foreach($element in $FulLInfo.testsuite.suiteelements.suiteelement)
+        {
+            Get-RQMTestCase -Id $element.testcase.href -ComputerName $ComputerName -Port $Port -Credential $Credential
+        }
+
+        [PSCustomObject]@{
+            Title = $FullInfo.testsuite.Title
+            Description = $FullInfo.testsuite.Description
+            TestCases = $TestCases
+        }
+    }
+}
+
+function Get-RQMTestCase {
+    param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory,ParameterSetName='Project')]$Project, [Parameter(Mandatory, ParameterSetName='Id')]$Id, [PSCredential]$Credential)
+
+    function ConvertTo-TestCase {
+        param($Uri, [Parameter(Mandatory)]$ComputerName, $Port=9443, [PSCredential]$Credential)
+
+        [xml]$FullInfo = Invoke-RQMApi -ComputerName $ComputerName -FullUri $Uri -Credential $Credential
         [xml]$TestScript = Invoke-RQMApi -ComputerName $ComputerName -FullUri $FullInfo.testcase.testscript.href -Credential $Credential
 
         [PSCustomObject]@{
-            Title = $TestCase.Title.'#text'
-            Summary = $TestCase.Summary.'#text'
+            Title = $FullInfo.Title
+            Description = $FullInfo.Description
             ProjectArea = [System.Web.HttpUtility]::UrlDecode($FullInfo.testcase.projectArea.alias)
             State = $FullInfo.testcase.state.'#text'
             Owner = $FullInfo.testcase.Owner
@@ -47,5 +67,19 @@ function Get-RQMTestCase {
                 Steps = $TestScript.testscript.steps.step
             }
         }
+    }
+
+    if ($Id -eq $null)
+    {
+        [Xml]$TestCases = Invoke-RQMApi -ComputerName $ComputerName -Path resources/$([System.Web.HttpUtility]::UrlEncode($Project))/testcase -Credential $Credential -Port $Port
+
+        foreach($TestCase in $TestCases.feed.entry)
+        {
+            ConvertTo-TestCase -Uri $TestCase.Id -ComputerName $ComputerName -Port $Port -Credential $Credential
+        }
+    }
+    else
+    {
+        ConvertTo-TestCase -Uri $Id -ComputerName $ComputerName -Port $Port -Credential $Credential
     }
 }
