@@ -1,8 +1,16 @@
-﻿function Invoke-JazzApi {
-    param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory)]$Path, [PSCredential]$Credential)
+﻿Add-Type -AssemblyName System.Web
+
+function Invoke-JazzApi {
+    param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory, ParameterSetName='Path')]$Path, [PSCredential]$Credential, [Parameter(Mandatory, ParameterSetName='FullUri')]$FullUri)
 
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $request = invoke-webrequest -Uri "https://$($ComputerName):$port/qm/service/com.ibm.rqm.integration.service.IIntegrationService/$Path" -WebSession $session
+
+    if ($FullUri -eq $Null)
+    {
+        $FullUri = "https://$($ComputerName):$port/qm/service/com.ibm.rqm.integration.service.IIntegrationService/$Path"
+    }
+
+    $request = invoke-webrequest -Uri $FullUri -WebSession $session
     if ($request.Headers['X-com-ibm-team-repository-web-auth-msg'] -eq 'authrequired')
     {
         $Body = "j_username=" + [System.Web.HttpUtility]::UrlEncode($Credential.UserName)
@@ -22,12 +30,24 @@ function Get-JazzTestCase {
 
     foreach($TestCase in $TestCases.feed.entry)
     {
+        [xml]$FullInfo = Invoke-JazzApi -ComputerName $ComputerName -FullUri $TestCase.Id -Credential $Credential
+
+        [xml]$TestScript = Invoke-JazzApi -ComputerName $ComputerName -FullUri $FullInfo.testcase.testscript.href -Credential $Credential
+
         [PSCustomObject]@{
             Title = $TestCase.Title.'#text'
             Summary = $TestCase.Summary.'#text'
+            ProjectArea = [System.Web.HttpUtility]::UrlDecode($FullInfo.testcase.projectArea.alias)
+            State = $FullInfo.testcase.state.'#text'
+            Owner = $FullInfo.testcase.Owner
+            Priority = $FullInfo.testcase.priority.'#text'
+            TestScript = [PSCustomObject]@{
+                Type = $TestScript.testscript.scripttype
+                Category = $TestScript.testscript.category.value
+                Steps = $TestScript.testscript.steps.step
+            }
         }
     }
 }
 
-
-
+Get-JazzTestCase -ComputerName qajazz.nmdp.org -Project 'Quality Assurance' -Credential (Get-Credential adriscol)
