@@ -1,1 +1,1 @@
-# A PowerShell Module to Access IBM RQM
+# A PowerShell Module to Access IBM Rational Quality Manager Reportable REST API
