@@ -50,4 +50,3 @@ function Get-JazzTestCase {
     }
 }
 
-Get-JazzTestCase -ComputerName qajazz.nmdp.org -Project 'Quality Assurance' -Credential (Get-Credential adriscol)
