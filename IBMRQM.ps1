@@ -1,6 +1,6 @@
 ﻿Add-Type -AssemblyName System.Web
 
-function Invoke-JazzApi {
+function Invoke-RQMApi {
     param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory, ParameterSetName='Path')]$Path, [PSCredential]$Credential, [Parameter(Mandatory, ParameterSetName='FullUri')]$FullUri)
 
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -23,16 +23,16 @@ function Invoke-JazzApi {
     (invoke-webrequest -Uri https://$($ComputerName):$Port/qm/service/com.ibm.rqm.integration.service.IIntegrationService/j_security_check -Method POST -ContentType 'application/x-www-form-urlencoded' -Body $Body -WebSession $session).Content
 }
 
-function Get-JazzTestCase {
+function Get-RQMTestCase {
     param([Parameter(Mandatory)]$ComputerName, $Port=9443, [Parameter(Mandatory)]$Project, [PSCredential]$Credential)
 
-    [Xml]$TestCases = Invoke-JazzApi -ComputerName $ComputerName -Path resources/$([System.Web.HttpUtility]::UrlEncode($Project))/testcase -Credential $Credential -Port $Port
+    [Xml]$TestCases = Invoke-RQMApi -ComputerName $ComputerName -Path resources/$([System.Web.HttpUtility]::UrlEncode($Project))/testcase -Credential $Credential -Port $Port
 
     foreach($TestCase in $TestCases.feed.entry)
     {
-        [xml]$FullInfo = Invoke-JazzApi -ComputerName $ComputerName -FullUri $TestCase.Id -Credential $Credential
+        [xml]$FullInfo = Invoke-RQMApi -ComputerName $ComputerName -FullUri $TestCase.Id -Credential $Credential
 
-        [xml]$TestScript = Invoke-JazzApi -ComputerName $ComputerName -FullUri $FullInfo.testcase.testscript.href -Credential $Credential
+        [xml]$TestScript = Invoke-RQMApi -ComputerName $ComputerName -FullUri $FullInfo.testcase.testscript.href -Credential $Credential
 
         [PSCustomObject]@{
             Title = $TestCase.Title.'#text'
@@ -49,4 +49,3 @@ function Get-JazzTestCase {
         }
     }
 }
-
